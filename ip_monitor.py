@@ -31,6 +31,23 @@ import json
 import math
 import time
 
+# Pakovana (PyInstaller) verzija: GStreamer mora da traži plugin-e samo u našem folderu.
+# Postavlja se ovde, posle svih PyInstaller hook-ova i pre uvoza 'gi'.
+if getattr(sys, "frozen", False):
+    _base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(sys.executable)))
+    _plugins = os.path.join(_base, "lib", "gstreamer-1.0")
+    for _k in ("GST_PLUGIN_PATH", "GST_PLUGIN_SYSTEM_PATH",
+               "GST_PLUGIN_PATH_1_0", "GST_PLUGIN_SYSTEM_PATH_1_0"):
+        os.environ[_k] = _plugins
+    os.environ["GST_PLUGIN_SCANNER"] = os.path.join(_base, "gst-plugin-scanner.exe")
+    os.environ["GI_TYPELIB_PATH"] = os.path.join(_base, "lib", "girepository-1.0")
+    os.environ["GST_REGISTRY"] = os.path.join(
+        os.environ.get("TEMP", _base), "ipmonitor-gst-registry.bin")
+    try:
+        os.add_dll_directory(_base)
+    except (AttributeError, OSError):
+        pass
+
 import gi
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst, GLib  # noqa: E402
@@ -1745,6 +1762,9 @@ def selftest():
             "avdec_aac", "x264enc", "matroskamux", "autoaudiosink"]
     missing = [n for n in need if Gst.ElementFactory.find(n) is None]
     print("GStreamer:", Gst.version_string())
+    print("plugin path:", os.environ.get("GST_PLUGIN_PATH"))
+    print("ucitano plugina:", len(Gst.Registry.get().get_plugin_list()),
+          "| libav:", Gst.Registry.get().find_plugin("libav") is not None)
     print("decklink plugin:", Gst.ElementFactory.find("decklinkvideosink") is not None)
     print("ndi plugin:", Gst.ElementFactory.find("ndisrc") is not None)
     print("NEDOSTAJE:", missing or "nista")
