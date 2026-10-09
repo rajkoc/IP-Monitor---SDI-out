@@ -58,11 +58,22 @@ jobs:
           done
           find "$OUT" -iname '*ggml*' -delete
 
-          # DLL zavisnosti preostalih plugina
-          for f in "$OUT"/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
-            ldd "$f" | awk '/\/ucrt64\// {print $3}'
-          done | sort -u | while read -r d; do cp -n "$d" "$OUT/"; done
-          find "$OUT" -iname '*ggml*' -delete
+          find "$OUT" -iname '*whisper*' -delete
+
+          # DLL zavisnosti: ponavljaj dok se pojavljuju novi (FFmpeg i sl. imaju lance zavisnosti)
+          for i in 1 2 3 4 5 6 7 8; do
+            before=$(ls "$OUT" | wc -l)
+            for f in "$OUT"/*.dll "$OUT"/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
+              [ -f "$f" ] && ldd "$f" 2>/dev/null | awk '/\/ucrt64\// {print $3}'
+            done | sort -u | while read -r d; do cp -n "$d" "$OUT/"; done
+            find "$OUT" -iname '*ggml*' -delete
+            after=$(ls "$OUT" | wc -l)
+            echo "prolaz $i: $before -> $after fajlova"
+            [ "$before" = "$after" ] && break
+          done
+
+          # dijagnostika: zavisnosti libav plugina koje i dalje fale
+          ldd "$OUT/lib/gstreamer-1.0/libgstlibav.dll" 2>&1 | grep -i "not found" || echo "libav: sve zavisnosti pronadjene"
           du -sh dist/IPMonitor
 
       # Provera u "čistom" okruženju (bez MSYS2 u PATH-u): da li paket sam radi.
