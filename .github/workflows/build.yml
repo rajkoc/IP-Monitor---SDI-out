@@ -48,17 +48,15 @@ jobs:
           cp /ucrt64/lib/girepository-1.0/*.typelib "$OUT/lib/girepository-1.0/"
           cp /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe "$OUT/"
 
-          # Izbaci plugine koje program ne koristi, a vuku velike/problematicne biblioteke
-          # (ggml/whisper/llama/onnx/opencv) - ggml je rusio program pri ucitavanju.
-          find "$OUT" -iname 'libgst*.dll' | while read -r f; do
-            if ldd "$f" 2>/dev/null | grep -qiE 'ggml|whisper|llama|onnxruntime|opencv'; then
-              echo "uklanjam plugin: $f"
-              rm -f "$f"
-            fi
-          done
-          find "$OUT" -iname '*ggml*' -delete
+          # PyInstaller je sam ubacio kopiju plugina u gst_plugins: izbaci je (duplo ucitavanje
+          # istog plugina rusi ggml). Ostaje samo lib/gstreamer-1.0.
+          rm -rf "$OUT/gst_plugins"
 
-          find "$OUT" -iname '*whisper*' -delete
+          # Izbaci plugine koje program ne koristi (po imenu). Ne brisemo ggml/whisper DLL-ove:
+          # FFmpeg (avfilter) ih trazi, a libav plugin nam treba za H.264/AAC.
+          for n in whisper onnx opencv llama codec2json; do
+            find "$OUT" -iname "libgst*${n}*.dll" -print -delete
+          done
 
           # DLL zavisnosti: ponavljaj dok se pojavljuju novi (FFmpeg i sl. imaju lance zavisnosti)
           for i in 1 2 3 4 5 6 7 8; do
@@ -66,13 +64,13 @@ jobs:
             for f in "$OUT"/*.dll "$OUT"/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
               [ -f "$f" ] && ldd "$f" 2>/dev/null | awk '/\/ucrt64\// {print $3}'
             done | sort -u | while read -r d; do cp -n "$d" "$OUT/"; done
-            find "$OUT" -iname '*ggml*' -delete
             after=$(ls "$OUT" | wc -l)
             echo "prolaz $i: $before -> $after fajlova"
             [ "$before" = "$after" ] && break
           done
 
-          # dijagnostika: zavisnosti libav plugina koje i dalje fale
+          # dijagnostika
+          ls -la "$OUT/lib/gstreamer-1.0/" | grep -i libav || echo "UPOZORENJE: libgstlibav.dll nije u paketu"
           ldd "$OUT/lib/gstreamer-1.0/libgstlibav.dll" 2>&1 | grep -i "not found" || echo "libav: sve zavisnosti pronadjene"
           du -sh dist/IPMonitor
 
