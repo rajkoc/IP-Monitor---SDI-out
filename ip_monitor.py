@@ -132,12 +132,12 @@ def disable_hw_decoders():
 def tune_decoder_ranks():
     """Softverski H.264: preferiraj avdec_h264 (gst-libav), izbaci openh264dec."""
     reg = Gst.Registry.get()
-    f = reg.lookup_feature("avdec_h264")
-    if f is not None:
-        f.set_rank(266)
-    f = reg.lookup_feature("openh264dec")
-    if f is not None:
-        f.set_rank(0)
+    av = reg.lookup_feature("avdec_h264")
+    if av is not None:
+        av.set_rank(266)
+        f = reg.lookup_feature("openh264dec")     # gasi samo ako imamo bolji dekoder
+        if f is not None:
+            f.set_rank(0)
 
 
 def _on_autoplug_select(_dec, _pad, _caps, factory):
