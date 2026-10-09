@@ -47,9 +47,22 @@ jobs:
           cp /ucrt64/lib/gstreamer-1.0/*.dll "$OUT/lib/gstreamer-1.0/"
           cp /ucrt64/lib/girepository-1.0/*.typelib "$OUT/lib/girepository-1.0/"
           cp /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe "$OUT/"
-          for f in /ucrt64/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
+
+          # Izbaci plugine koje program ne koristi, a vuku velike/problematicne biblioteke
+          # (ggml/whisper/llama/onnx/opencv) - ggml je rusio program pri ucitavanju.
+          find "$OUT" -iname 'libgst*.dll' | while read -r f; do
+            if ldd "$f" 2>/dev/null | grep -qiE 'ggml|whisper|llama|onnxruntime|opencv'; then
+              echo "uklanjam plugin: $f"
+              rm -f "$f"
+            fi
+          done
+          find "$OUT" -iname '*ggml*' -delete
+
+          # DLL zavisnosti preostalih plugina
+          for f in "$OUT"/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
             ldd "$f" | awk '/\/ucrt64\// {print $3}'
-          done | sort -u | while read d; do cp -n "$d" "$OUT/"; done
+          done | sort -u | while read -r d; do cp -n "$d" "$OUT/"; done
+          find "$OUT" -iname '*ggml*' -delete
           du -sh dist/IPMonitor
 
       # Provera u "čistom" okruženju (bez MSYS2 u PATH-u): da li paket sam radi.
