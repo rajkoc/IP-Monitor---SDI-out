@@ -1,0 +1,65 @@
+# Stavi ovaj fajl u repozitorijum kao:  .github/workflows/build.yml
+name: Build Windows exe
+
+on:
+  workflow_dispatch:          # ručno pokretanje (Actions -> Build Windows exe -> Run workflow)
+  push:
+    tags: ["v*"]              # ili automatski kad napraviš tag npr. v1.0
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-pyinstaller
+            mingw-w64-ucrt-x86_64-pyside6
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-plugins-ugly
+            mingw-w64-ucrt-x86_64-gst-libav
+
+      - name: Build (PyInstaller)
+        shell: msys2 {0}
+        run: |
+          pyinstaller --noconfirm --clean --onedir --console --name IPMonitor \
+            --runtime-hook github_build/rthook_gst.py \
+            --collect-submodules gi \
+            --hidden-import gi.repository.Gst \
+            --hidden-import gi.repository.GLib \
+            --hidden-import gi.repository.GObject \
+            ip_monitor.py
+
+      - name: Add GStreamer plugins and their DLLs
+        shell: msys2 {0}
+        run: |
+          OUT=dist/IPMonitor/_internal
+          mkdir -p "$OUT/lib/gstreamer-1.0" "$OUT/lib/girepository-1.0"
+          cp /ucrt64/lib/gstreamer-1.0/*.dll "$OUT/lib/gstreamer-1.0/"
+          cp /ucrt64/lib/girepository-1.0/*.typelib "$OUT/lib/girepository-1.0/"
+          cp /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe "$OUT/"
+          for f in /ucrt64/lib/gstreamer-1.0/*.dll /ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe; do
+            ldd "$f" | awk '/\/ucrt64\// {print $3}'
+          done | sort -u | while read d; do cp -n "$d" "$OUT/"; done
+          du -sh dist/IPMonitor
+
+      # Provera u "čistom" okruženju (bez MSYS2 u PATH-u): da li paket sam radi.
+      - name: Self-test (clean environment)
+        shell: pwsh
+        run: |
+          ./dist/IPMonitor/IPMonitor.exe --selftest
+          if ($LASTEXITCODE -ne 0) { throw "selftest nije prosao" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IPMonitor-windows
+          path: dist/IPMonitor
