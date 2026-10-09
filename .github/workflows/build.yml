@@ -19,7 +19,7 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-gobject
-            mingw-w64-ucrt-x86_64-python-pyinstaller
+            mingw-w64-ucrt-x86_64-pyinstaller
             mingw-w64-ucrt-x86_64-pyside6
             mingw-w64-ucrt-x86_64-gstreamer
             mingw-w64-ucrt-x86_64-gst-plugins-base
